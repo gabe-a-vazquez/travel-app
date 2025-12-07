@@ -42,3 +42,6 @@ coverage/
 
 # Claude specific
 .claude/
+
+# ADK session databases
+**/agents/**/session.db
