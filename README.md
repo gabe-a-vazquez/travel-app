@@ -20,7 +20,7 @@ travel-app/
 - Node.js 18+
 - pnpm 8+
 - Python 3.11+
-- A Google AI Studio API key (for Gemini)
+- A Google AI Studio API key (for Gemini and ADK)
 
 ## Setup
 
@@ -44,7 +44,10 @@ pip install -r requirements.txt
 **Backend (`apps/api/.env`):**
 ```
 GEMINI_API_KEY=your_gemini_api_key_here
+GOOGLE_API_KEY=your_google_api_key_here
 ```
+
+> Note: You can use the same API key from Google AI Studio for both `GEMINI_API_KEY` and `GOOGLE_API_KEY`.
 
 **Frontend (`apps/web/.env.local`):**
 ```
@@ -71,11 +74,24 @@ pnpm dev:api
 pnpm dev:web
 ```
 
+### Option 3: Run Google ADK Web UI
+
+To use the Google Agent Development Kit (ADK) web interface with Gemini:
+
+```bash
+pnpm dev:adk
+```
+
+This will start the ADK web UI on port 8001. The ADK provides an interactive interface to chat with the travel assistant agent powered by Gemini 2.5 Flash with Google Search capabilities.
+
+> **Note**: The ADK web UI is for development and debugging only, not for production use.
+
 ### Access the app
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API docs: http://localhost:8000/docs
+- ADK Web UI: http://localhost:8001 (when running `pnpm dev:adk`)
 
 ## API Endpoints
 
@@ -106,6 +122,27 @@ Both services are configured for Railway deployment:
 
 ## Tech Stack
 
-- **Backend**: FastAPI, Uvicorn, Google Generative AI (Gemini)
+- **Backend**: FastAPI, Uvicorn, Google Generative AI (Gemini), Google ADK
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, shadcn/ui
 - **Deployment**: Railway
+
+## Google ADK Integration
+
+This project includes Google's Agent Development Kit (ADK), which provides:
+
+- **Travel Assistant Agent**: A specialized agent configured for travel planning
+- **Google Search Integration**: The agent can search for current travel information
+- **Interactive Web UI**: Development interface for testing and debugging
+- **Model**: Gemini 2.5 Flash for fast, efficient responses
+
+### ADK Features
+
+The travel assistant agent (`apps/api/src/services/adk_agent.py`) is configured to:
+- Help users plan trips and itineraries
+- Provide information about destinations and attractions
+- Answer travel-related questions
+- Use Google Search for up-to-date information
+
+### Running the ADK
+
+Use the command `pnpm dev:adk` to start the ADK web interface. The agent will be available at http://localhost:8001 where you can interact with it through a chat interface.

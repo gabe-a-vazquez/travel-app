@@ -4,6 +4,7 @@
   "scripts": {
     "dev:web": "pnpm --filter web dev",
     "dev:api": "cd apps/api && uvicorn src.main:app --reload --port 8000",
+    "dev:adk": "cd apps/api && python run_adk.py",
     "dev": "concurrently \"pnpm dev:api\" \"pnpm dev:web\"",
     "build:web": "pnpm --filter web build",
     "lint": "pnpm --filter web lint"
