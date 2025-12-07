@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev:web": "pnpm --filter web dev",
-    "dev:api": "cd apps/api && uvicorn src.main:app --reload --port 8000",
+    "dev:api": "cd apps/api && source venv/bin/activate && uvicorn src.main:app --reload --port 8000",
     "dev": "concurrently \"pnpm dev:api\" \"pnpm dev:web\"",
     "build:web": "pnpm --filter web build",
     "lint": "pnpm --filter web lint"
