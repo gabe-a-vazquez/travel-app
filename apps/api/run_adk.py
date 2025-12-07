@@ -26,4 +26,4 @@ print("The web interface will be available at http://localhost:8001")
 print("Note: ADK Web is for development and debugging only, not for production use.")
 print("\nPress Ctrl+C to stop the server.\n")
 
-os.system("/usr/local/bin/adk web src/services/adk_agent.py --port 8001")
+os.system("/usr/local/bin/adk web src/services --port 8001")
