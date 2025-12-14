@@ -1,5 +1,5 @@
-"""Tools for the travel agent."""
+"""Tools for the travel assistant agent."""
 
-from .amadeus_tools import search_location, search_activities
+from .amadeus_tools import search_location_tool, search_activities_tool
 
-__all__ = ['search_location', 'search_activities']
+__all__ = ['search_location_tool', 'search_activities_tool']

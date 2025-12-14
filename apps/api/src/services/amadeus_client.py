@@ -71,8 +71,12 @@ class AmadeusService:
 
             # Parse and return city data
             cities = []
-            print("GABE RESPONSE:", response)
-            for city in response.data: #REGROUP HERE
+
+            # Check if response has data before iterating
+            if not response.data:
+                return cities
+
+            for city in response.data:
                 cities.append({
                     'name': city.get('name'),
                     'iata_code': city.get('iataCode'),
@@ -96,7 +100,7 @@ class AmadeusService:
         self,
         latitude: float,
         longitude: float,
-        radius: int = 1,
+        radius: int = 5,
         max_results: int = 20
     ) -> List[Dict[str, Any]]:
         """
@@ -127,7 +131,12 @@ class AmadeusService:
 
             # Parse and return activity data
             activities = []
-            for activity in response.data[:max_results]:
+
+            # Check if response has data before iterating
+            if not response.data:
+                return activities
+
+            for activity in response.data:
                 activities.append({
                     'id': activity.get('id'),
                     'name': activity.get('name'),
