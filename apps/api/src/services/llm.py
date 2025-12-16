@@ -13,7 +13,7 @@ else:
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-model = genai.GenerativeModel("gemini-2.0-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 
 async def generate_response(prompt: str) -> str:

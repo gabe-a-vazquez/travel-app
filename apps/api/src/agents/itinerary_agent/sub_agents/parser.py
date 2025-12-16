@@ -13,7 +13,6 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 from google.adk.agents import Agent
-from ..tools import parse_itinerary_tool
 
 
 parser_agent = Agent(
@@ -22,12 +21,36 @@ parser_agent = Agent(
     description='Parses raw itinerary text into structured day-by-day data',
     instruction="""You are an itinerary parsing specialist.
 
-Your task:
-1. Use parse_itinerary tool to extract structured information from the itinerary text
-2. The tool returns JSON with days, locations, activities, and overnight stays
-3. Your final response MUST be ONLY the JSON result from the tool, nothing else
+Your task: Parse raw itinerary text into structured day-by-day JSON data.
 
-IMPORTANT: After calling the tool, output ONLY the exact JSON result that the tool returned. Do not add any explanation or additional text.""",
-    tools=[parse_itinerary_tool],
+IMPORTANT: Respond with ONLY valid JSON, no markdown formatting, no backticks, no explanations.
+
+Extract for each day:
+- day: Day number (integer)
+- location: Primary location/city for activities
+- activity_description: What the traveler will do
+- overnight: Where they'll stay overnight
+
+REQUIRED OUTPUT FORMAT (JSON only):
+{
+    "status": "success",
+    "days": [
+        {
+            "day": 1,
+            "location": "city name",
+            "activity_description": "what they'll do",
+            "overnight": "where they'll sleep"
+        }
+    ]
+}
+
+If the itinerary is unclear or invalid:
+{
+    "status": "error",
+    "error": "description of the problem",
+    "days": []
+}
+
+Parse the itinerary text provided and output JSON only, no markdown.""",
     output_key='parsed_days'
 )

@@ -1,11 +1,12 @@
 """
 Location search agent for itinerary enrichment workflow.
 
-A custom agent that reads parsed days from state, creates dynamic
-sub-agents for each location, and runs them in parallel.
+A custom agent that reads parsed days from state and performs location
+searches WITHOUT using an LLM. This demonstrates LLM-free orchestration
+within the ADK framework - deterministic operations that don't require
+reasoning can skip the LLM overhead entirely.
 
-This demonstrates a custom agent pattern where sub-agents are created
-dynamically at runtime based on state values, as per ADK documentation:
+Pattern: Custom BaseAgent + direct tool function calls + session state management
 https://google.github.io/adk-docs/agents/custom-agents/
 """
 
@@ -18,127 +19,144 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 import json
+import asyncio
+import logging
 from typing import AsyncGenerator
-from google.adk.agents import ParallelAgent, Agent, BaseAgent
+from google.adk.agents import BaseAgent
 from google.adk.events import Event
 from google.adk.runners import InvocationContext
-from ..tools import search_location_tool
+from google.genai import types
+# Import the underlying Python function directly, not the FunctionTool wrapper
+from ..tools.amadeus_tools import search_location
+
+# Initialize logger for this module
+logger = logging.getLogger(__name__)
 
 
 class LocationSearchAgent(BaseAgent):
     """
-    Custom agent that dynamically creates and runs location searches in parallel.
+    Custom agent that searches for location coordinates WITHOUT using an LLM.
 
-    This agent demonstrates conditional orchestration by:
+    This agent demonstrates LLM-free orchestration within ADK by:
     1. Reading session state to determine runtime behavior
-    2. Creating sub-agents dynamically based on state values
-    3. Properly yielding events from sub-agents upstream
+    2. Calling tool functions directly (no LLM needed for deterministic API calls)
+    3. Running searches in parallel using asyncio
+    4. Writing results directly to session state
 
-    Inherits from BaseAgent and implements _run_async_impl as per ADK spec.
+    Key insight: When operations are deterministic (input → tool → output),
+    skip the LLM overhead entirely and call the underlying functions directly.
     """
 
     # Allow arbitrary types (needed for Pydantic to work with ADK agent types)
     model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self):
-        """
-        Initialize the location search agent.
-
-        Note: Sub-agents are created dynamically in _run_async_impl based on
-        runtime state, so we pass an empty list here.
-        """
+        """Initialize the location search agent (no sub-agents needed)."""
         super().__init__(
             name='search_location_agent',
             description='Search for coordinates of all locations in parallel',
-            sub_agents=[]  # Sub-agents created dynamically at runtime
+            sub_agents=[]
         )
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
-        Read parsed days from state, create location sub-agents, and run them in parallel.
+        Read parsed_days from state, search locations in parallel, write results to state.
 
-        This method demonstrates the custom agent pattern:
-        - Uses ctx.session.state to read shared data
-        - Implements conditional logic based on state values
-        - Creates sub-agents dynamically
-        - Properly yields events from sub-agents
+        This demonstrates LLM-free orchestration:
+        - Reads structured data from session state
+        - Calls Python functions directly (no LLM inference)
+        - Runs operations in parallel with asyncio
+        - Writes results to session state for downstream agents
 
         Args:
             ctx: InvocationContext containing session and state
 
         Yields:
-            Events from the parallel location search agents
+            Event: Start and completion events for web UI logging
         """
-        # Access session state - the primary way to share data between agents
         session = ctx.session
-        print("GABE STATE:", session.state)
+        logger.info("=" * 70)
+        logger.info("LOCATION SEARCH AGENT (LLM-FREE) INVOKED")
+        logger.info("=" * 70)
+
+        # Yield start event for web UI logging
+        yield Event(
+            author=self.name,
+            content=types.Content(parts=[types.Part(text="Starting location search for all itinerary destinations...")])
+        )
 
         # Read from session state
         parsed_data = session.state.get('parsed_days')
+        logger.debug(f"Session state: {session.state}")
 
         # Handle case where parsed_data might be a JSON string
         if isinstance(parsed_data, str):
             try:
                 parsed_data = json.loads(parsed_data)
             except json.JSONDecodeError:
-                # Invalid JSON, early exit (conditional logic)
+                # print("ERROR: Invalid JSON in parsed_days")
                 return
 
-        # Unwrap the tool response if it's wrapped with 'parse_itinerary_response'
-        if parsed_data and 'parse_itinerary_response' in parsed_data:
-            parsed_data = parsed_data['parse_itinerary_response']
-
-        # Conditional logic: check prerequisites before proceeding
+        # Conditional logic: check prerequisites
         if not parsed_data or parsed_data.get('status') != 'success':
-            # Early exit - no work to do
+            logger.warning("No valid parsed_data in session state")
             return
 
         parsed_days = parsed_data.get('days', [])
 
-        # Extract unique locations from state
+        # Extract unique locations
         unique_locations = list(set(
-            day['location']
+            day['overnight']
             for day in parsed_days
-            if 'location' in day and day['location']
+            if 'overnight' in day and day['overnight']
         ))
 
-        # Conditional logic: early exit if no locations found
         if not unique_locations:
+            logger.error("No locations found in parsed itinerary")
             return
 
-        # Dynamic sub-agent creation based on runtime state
-        # This is a key feature of custom agents - creating agents on-the-fly
-        location_agents = []
-        for location in unique_locations:
-            safe_name = location.lower().replace(" ", "_").replace(",", "")
+        logger.info(f"Found {len(unique_locations)} unique locations: {unique_locations}")
 
-            # Each location gets its own agent with a unique output_key
-            # The output_key writes results to session.state for downstream agents
-            agent = Agent(
-                model='gemini-2.5-flash',
-                name=f'search_{safe_name}',
-                description=f'Search for coordinates of {location}',
-                instruction=f"""Search for the coordinates of {location}.
-
-Use the search_location tool with location_name="{location}".
-Extract the primary location from results and save coordinates.""",
-                tools=[search_location_tool],
-                output_key=f'coords_{location}'  # Results written to session.state
+        # Define async wrapper for the synchronous search_location function
+        async def search_location_async(location: str) -> tuple[str, dict]:
+            """Call search_location in thread pool to avoid blocking."""
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,  # Use default executor
+                search_location,
+                location,
+                None  # country_code
             )
-            location_agents.append(agent)
+            return location, result
 
-        # Create ParallelAgent to orchestrate sub-agents
-        parallel_agent = ParallelAgent(
-            name='location_searcher',
-            description=f'Search {len(location_agents)} locations in parallel',
-            sub_agents=location_agents
+        # Run all location searches in parallel
+        logger.info("Starting parallel location searches...")
+        search_tasks = [search_location_async(loc) for loc in unique_locations]
+        results = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+        # Write results to session state (mimicking what output_key does)
+        for item in results:
+            if isinstance(item, Exception):
+                logger.error(f"Location search failed: {item}")
+                continue
+
+            location, result = item
+            state_key = f'coords_{location}'
+            session.state[state_key] = result
+            logger.debug(f"Saved coordinates for '{location}' to state key '{state_key}'")
+
+        logger.info(f"Location search completed: {len(results)} results")
+        logger.debug(f"Final session state: {session.state}")
+        logger.info("=" * 70)
+
+        # Yield completion event for web UI logging
+        success_count = sum(1 for r in results if not isinstance(r, Exception))
+        yield Event(
+            author=self.name,
+            content=types.Content(parts=[types.Part(
+                text=f"Location search completed: {success_count}/{len(results)} locations found"
+            )])
         )
-
-        # Properly yield events from sub-agent upstream
-        # This is the correct pattern per ADK documentation:
-        # "async for event in sub_agent.run_async(ctx): yield event"
-        async for event in parallel_agent.run_async(ctx):
-            yield event
 
 
 # Create singleton instance for use in parent agents

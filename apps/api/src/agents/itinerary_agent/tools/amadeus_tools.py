@@ -10,6 +10,7 @@ from typing import Optional
 from google.adk.tools import FunctionTool
 import sys
 import os
+import logging
 
 # Add src directory to path
 src_path = os.path.join(os.path.dirname(__file__), '..', '..', '..')
@@ -17,6 +18,9 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 from services.amadeus_client import get_amadeus_service
+
+# Initialize logger for this module
+logger = logging.getLogger(__name__)
 
 
 def search_location(
@@ -35,6 +39,9 @@ def search_location(
     Returns:
         Dictionary containing matching cities with their coordinates (latitude, longitude)
     """
+    # Log the request payload
+    logger.info(f"search_location called with location_name='{location_name}', country_code={country_code}")
+
     amadeus = get_amadeus_service()
     results = amadeus.search_city(
         keyword=location_name,
@@ -42,7 +49,11 @@ def search_location(
         max_results=5
     )
 
+    # Log the raw API response
+    logger.debug(f"Amadeus API raw response for '{location_name}': {results}")
+
     if isinstance(results, dict) and results.get('error'):
+        logger.warning(f"Location search failed for '{location_name}': {results.get('message')}")
         return {
             'success': False,
             'error': results.get('message'),
@@ -54,17 +65,24 @@ def search_location(
         }
 
     if not results:
+        logger.warning(f"No locations found for '{location_name}'")
         return {
             'success': False,
             'message': f'No locations found for "{location_name}"'
         }
 
-    return {
+    response = {
         'success': True,
         'count': len(results),
         'locations': results,
         'primary_location': results[0] if results else None
     }
+
+    # Log the formatted response
+    logger.info(f"search_location success: found {len(results)} location(s) for '{location_name}'")
+    logger.debug(f"Formatted response: {response}")
+
+    return response
 
 
 def search_activities(
@@ -85,6 +103,9 @@ def search_activities(
     Returns:
         Dictionary containing tours and activities with names, descriptions, prices, ratings
     """
+    # Log the request payload
+    logger.info(f"search_activities called with lat={latitude}, lon={longitude}, radius={radius_km}km, max={max_results}")
+
     amadeus = get_amadeus_service()
     results = amadeus.search_tours_and_activities(
         latitude=latitude,
@@ -93,19 +114,24 @@ def search_activities(
         max_results=max_results
     )
 
+    # Log the raw API response
+    # logger.debug(f"Amadeus API raw response for ({latitude}, {longitude}): {results}")
+
     if isinstance(results, dict) and results.get('error'):
+        logger.warning(f"Activity search failed for ({latitude}, {longitude}): {results.get('message')}")
         return {
             'success': False,
             'error': results.get('message')
         }
 
     if not results:
+        logger.warning(f"No activities found within {radius_km}km of ({latitude}, {longitude})")
         return {
             'success': False,
             'message': f'No activities found within {radius_km}km'
         }
 
-    return {
+    response = {
         'success': True,
         'count': len(results),
         'search_params': {
@@ -115,6 +141,12 @@ def search_activities(
         },
         'activities': results
     }
+
+    # Log the formatted response
+    logger.info(f"search_activities success: found {len(results)} activity(ies) within {radius_km}km")
+    # logger.debug(f"Formatted response: {response}")
+
+    return response
 
 
 # Export as FunctionTools
